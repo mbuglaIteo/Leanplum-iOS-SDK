@@ -57,7 +57,7 @@
     } onError:^(NSError *error) {
     }];
 
-    OCMVerify([manager.engine operationWithPath:[OCMArg any] params:[OCMArg any] httpMethod:[OCMArg any] ssl:[OCMArg any] timeoutSeconds:60]);
+    OCMVerify([manager.engine operationWithPath:[OCMArg any] params:[OCMArg any] httpMethod:[OCMArg any] ssl:[OCMArg any] timeoutSeconds:60])
 
 //    OCMVerify([manager.engine enqueueOperation:opMock]);
 //    OCMVerify([opMock addCompletionHandler:[OCMArg any] errorHandler:[OCMArg any]]);
