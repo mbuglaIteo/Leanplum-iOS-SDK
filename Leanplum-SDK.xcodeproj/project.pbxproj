@@ -325,6 +325,7 @@
 		5B23414621ED995100206ACB /* LeanplumSDK_tvOS.h in Headers */ = {isa = PBXBuildFile; fileRef = 5B233E8421ED95AD00206ACB /* LeanplumSDK_tvOS.h */; };
 		5B23414721ED995500206ACB /* LeanplumSDK_iOS.h in Headers */ = {isa = PBXBuildFile; fileRef = 5B233C3321ED902900206ACB /* LeanplumSDK_iOS.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		61B186A824E44665ED526E8F /* Pods_Leanplum_iOS_Example.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 090C8E91DAFDE753EF49E13C /* Pods_Leanplum_iOS_Example.framework */; };
+		A81D86D9221CC662003B9A3B /* LPFileTransferManagerTest.m in Sources */ = {isa = PBXBuildFile; fileRef = A81D86D7221CC659003B9A3B /* LPFileTransferManagerTest.m */; };
 		A8DBE2652204FDA00080818A /* LPFileTransferManager.h in Headers */ = {isa = PBXBuildFile; fileRef = A8DBE2632204FDA00080818A /* LPFileTransferManager.h */; };
 		A8DBE2662204FDA00080818A /* LPFileTransferManager.m in Sources */ = {isa = PBXBuildFile; fileRef = A8DBE2642204FDA00080818A /* LPFileTransferManager.m */; };
 		F10BE7FBEDF1FD42E0D5C8C0 /* Pods_LeanplumSDKTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4F21D3DB0BE369EA3E87FDC /* Pods_LeanplumSDKTests.framework */; };
@@ -559,6 +560,7 @@
 		8B6F288A14D3DC03AE34508A /* Pods-Leanplum-iOS-Example.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Leanplum-iOS-Example.release.xcconfig"; path = "Pods/Target Support Files/Pods-Leanplum-iOS-Example/Pods-Leanplum-iOS-Example.release.xcconfig"; sourceTree = "<group>"; };
 		9A9A6BD32DCA7415FAF3B6A7 /* Pods_Leanplum_tvOS_Example.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Leanplum_tvOS_Example.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A4A6ABC6920A431C861DC0C7 /* Pods-LeanplumSDKTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LeanplumSDKTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-LeanplumSDKTests/Pods-LeanplumSDKTests.debug.xcconfig"; sourceTree = "<group>"; };
+		A81D86D7221CC659003B9A3B /* LPFileTransferManagerTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LPFileTransferManagerTest.m; sourceTree = "<group>"; };
 		A8DBE2632204FDA00080818A /* LPFileTransferManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LPFileTransferManager.h; sourceTree = "<group>"; };
 		A8DBE2642204FDA00080818A /* LPFileTransferManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LPFileTransferManager.m; sourceTree = "<group>"; };
 		B36C7F13E8B7873FD7B2D1CA /* Pods_LeanplumSDK_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LeanplumSDK_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -732,6 +734,7 @@
 				5B233E0121ED923200206ACB /* NewsfeedTest.m */,
 				5B233E0221ED923200206ACB /* LPFileManagerTest.m */,
 				5B233E0321ED923200206ACB /* LPMessageTemplatesClassTest.m */,
+				A81D86D7221CC659003B9A3B /* LPFileTransferManagerTest.m */,
 				5B233E0421ED923200206ACB /* LPCountAggregatorTest.m */,
 				5B233E0521ED923200206ACB /* LPRequestFactoryTest.m */,
 				5B233E0621ED923200206ACB /* ExceptionsTest.m */,
@@ -1694,6 +1697,7 @@
 				5B233E4F21ED923200206ACB /* LPEventCallbackManagerTest.m in Sources */,
 				5B233E4E21ED923200206ACB /* LPFeatureFlagManagerTest.m in Sources */,
 				5B233E4421ED923200206ACB /* LPRequestSenderTest.m in Sources */,
+				A81D86D9221CC662003B9A3B /* LPFileTransferManagerTest.m in Sources */,
 				5B233E4521ED923200206ACB /* LPRequestTest.m in Sources */,
 				5B233E4B21ED923200206ACB /* LeanplumHelper.m in Sources */,
 				5B233E4A21ED923200206ACB /* LPNetworkOperation+Category.m in Sources */,

@@ -238,9 +238,7 @@
 
 - (void)downloadFile:(NSString *)path onResponse:(LPNetworkResponseBlock)responseBlock onError:(LPNetworkErrorBlock)errorBlock
 {
-    LPRequestFactory *reqFactory = [[LPRequestFactory alloc]
-                                    initWithFeatureFlagManager:[LPFeatureFlagManager sharedManager]];
-    id<LPRequesting> request = [reqFactory downloadFileWithParams:nil];
+    id<LPRequesting> request = [self downloadRequest];
     if ([request isKindOfClass:[LeanplumRequest class]]) {
         LeanplumRequest *oldRequest = request;
         [oldRequest onResponse:^(id<LPNetworkOperationProtocol> operation, id json) {
@@ -308,6 +306,12 @@
         }];
         [self.engine enqueueOperation: op];
     }
+}
+
+-(id<LPRequesting>)downloadRequest {
+    LPRequestFactory *reqFactory = [[LPRequestFactory alloc]
+                                    initWithFeatureFlagManager:[LPFeatureFlagManager sharedManager]];
+    return [reqFactory downloadFileWithParams:nil];
 }
 
 - (int)numPendingDownloads

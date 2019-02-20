@@ -233,6 +233,7 @@ NSString *LP_API_METHOD_DELETE_INBOX_MESSAGE = @"deleteNewsfeedMessage";
 }
 
 -(BOOL)shouldReturnLPRequestClass {
+    return YES;
     [self.countAggregator incrementCount:@"should_return_lprequest_class"];
     return [self.featureFlagManager isFeatureFlagEnabled:LP_FEATURE_FLAG_REQUEST_REFACTOR];
 }
