@@ -29,11 +29,20 @@
 // That's it!
 
 #import <Foundation/Foundation.h>
+
+#ifdef LPStaticLibrary
 #import "Leanplum.h"
+#else
+#import <Leanplum/Leanplum.h>
+#endif
+
+#ifndef LPMessageTemplatesClass
+#define LPMessageTemplatesClass LPMessageTemplates
+#endif
 
 @interface LPMessageTemplatesClass : NSObject
 #if LP_NOT_TV
-    <UIAlertViewDelegate, UIWebViewDelegate>
+<UIAlertViewDelegate, UIWebViewDelegate>
 #endif
 
 + (LPMessageTemplatesClass *)sharedTemplates;
@@ -41,6 +50,7 @@
 #if LP_NOT_TV
 - (void)disableAskToAsk;
 - (void)refreshPushPermissions;
++ (UIImage *)imageFromColor:(UIColor *)color;
 #endif
 
 @end

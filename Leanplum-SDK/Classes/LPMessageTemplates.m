@@ -29,10 +29,11 @@
 #import "LPMessageTemplates.h"
 #import <QuartzCore/QuartzCore.h>
 #import <StoreKit/StoreKit.h>
-#import "LPCountAggregator.h"
+#import "RSTAGManager.h"
+#import "RSModalAlert.h"
 
 #define APP_NAME (([[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"]) ?: \
-    ([[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"]))
+([[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"]))
 
 #define LPMT_ALERT_NAME @"Alert"
 #define LPMT_CONFIRM_NAME @"Confirm"
@@ -43,6 +44,7 @@
 #define LPMT_WEB_INTERSTITIAL_NAME @"Web Interstitial"
 #define LPMT_OPEN_URL_NAME @"Open URL"
 #define LPMT_HTML_NAME @"HTML"
+#define LPMT_3_BUTTON_CONFIRM_NAME @"3-button Confirm"
 #define LPMT_APP_RATING_NAME @"Request App Rating"
 #define LPMT_ICON_CHANGE_NAME @"Change App Icon"
 
@@ -61,6 +63,9 @@
 #define LPMT_ARG_ACCEPT_TEXT @"Accept text"
 #define LPMT_ARG_DISMISS_TEXT @"Dismiss text"
 #define LPMT_HAS_DISMISS_BUTTON @"Has dismiss button"
+// #### example: Adding a 'Maybe' option
+#define LPMT_ARG_MAYBE_TEXT @"Maybe text"
+#define LPMT_ARG_MAYBE_ACTION @"Maybe action"
 #define LPMT_ARG_HTML_TEMPLATE @"__file__Template"
 
 #define LPMT_ARG_TITLE_TEXT @"Title.Text"
@@ -94,6 +99,8 @@
 #define LPMT_DEFAULT_OK_BUTTON_TEXT @"OK"
 #define LPMT_DEFAULT_YES_BUTTON_TEXT @"Yes"
 #define LPMT_DEFAULT_NO_BUTTON_TEXT @"No"
+// #### example: Adding Default Maybe button Text
+#define LPMT_DEFAULT_MAYBE_BUTTON_TEXT @"Maybe"
 #define LPMT_DEFAULT_LATER_BUTTON_TEXT @"Maybe Later"
 #define LPMT_DEFAULT_URL @"http://www.example.com"
 #define LPMT_DEFAULT_CLOSE_URL @"http://leanplum/close"
@@ -138,7 +145,14 @@ context.actionName, exception, [exception callStackSymbols])
 
 static NSString *DEFAULTS_ASKED_TO_PUSH = @"__Leanplum_asked_to_push";
 static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
+/////////////////////////////////////////////////////////////////////////////////////
+////////MJR - make messageID accesibile
+@interface LPActionContext ()
 
+- (NSString *)messageId;
+
+@end
+////////end Mike's stuff
 #pragma mark Helper View Class
 @interface LPHitView : UIView
 @property (strong, nonatomic) void (^callback)(void);
@@ -191,8 +205,6 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         sharedTemplates = [[self alloc] init];
     });
     
-    [[LPCountAggregator sharedAggregator] incrementCount:@"shared_templates"];
-    
     return sharedTemplates;
 }
 
@@ -212,6 +224,16 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         topController = topController.presentedViewController;
     }
     return topController;
+}
+
+-(void)sendEventTags:(NSString*)eventName isNotNow:(BOOL)notNow isHardAsk:(BOOL)hardAsk {
+    RSTAGManager* tagManager = [RSTAGManager sharedInstance];
+    tagManager.userSawNotificationSoftAsk = YES;
+    if (hardAsk == NO) {
+        [tagManager tagAndPushNotificationEvents:eventName withSoftAsk:notNow == YES ? @"soft-ask-not-now" : @"soft-ask-ok"];
+    } else {
+        [tagManager tagAndPushNotificationEvents:eventName withSoftAsk:nil];
+    }
 }
 
 // Defines the preset in-app messaging and action templates.
@@ -262,7 +284,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                          [alert show];
 #endif
                      }
-
+                     
                      [self->_contexts addObject:context];
                      return YES;
                  }
@@ -295,7 +317,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                              [self alertDismissedWithButtonIndex:1];
                          }];
                          [alert addAction:accept];
-
+                         
                          [[LPMessageTemplatesClass visibleViewController]
                           presentViewController:alert animated:YES completion:nil];
                      } else
@@ -319,6 +341,92 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                      return NO;
                  }
              }];
+    // #### example: Defining the Action for LPMT_3_BUTTON_CONFIRM_NAME
+    [Leanplum defineAction:LPMT_3_BUTTON_CONFIRM_NAME
+                    ofKind:kLeanplumActionKindMessage | kLeanplumActionKindAction
+             withArguments:@[
+                             [LPActionArg argNamed:LPMT_ARG_TITLE withString:APP_NAME],
+                             [LPActionArg argNamed:LPMT_ARG_MESSAGE withString:LPMT_DEFAULT_CONFIRM_MESSAGE],
+                             [LPActionArg argNamed:LPMT_ARG_ACCEPT_TEXT withString:LPMT_DEFAULT_YES_BUTTON_TEXT],
+                             [LPActionArg argNamed:LPMT_ARG_CANCEL_TEXT withString:LPMT_DEFAULT_NO_BUTTON_TEXT],
+                             // adding the Maybe button text
+                             [LPActionArg argNamed:LPMT_ARG_MAYBE_TEXT withString:LPMT_DEFAULT_MAYBE_BUTTON_TEXT],
+                             [LPActionArg argNamed:LPMT_ARG_ACCEPT_ACTION withAction:nil],
+                             [LPActionArg argNamed:LPMT_ARG_CANCEL_ACTION withAction:nil],
+                             // adding the Maybe action
+                             [LPActionArg argNamed:LPMT_ARG_MAYBE_ACTION withAction:nil],
+                             ]
+             withResponder:^BOOL(LPActionContext *context) {
+                 @try {
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
+                     if (NSClassFromString(@"UIAlertController")) {
+                         UIAlertController *alert = [UIAlertController alertControllerWithTitle:NSLocalizedString([context stringNamed:LPMT_ARG_TITLE], nil) message:NSLocalizedString([context stringNamed:LPMT_ARG_MESSAGE], nil) preferredStyle:UIAlertControllerStyleAlert];
+                         
+                         UIAlertAction *cancel = [UIAlertAction actionWithTitle:NSLocalizedString([context stringNamed:LPMT_ARG_CANCEL_TEXT], nil) style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+                             [self alertDismissedWithButtonIndex:0];
+                             
+                         }];
+                         [alert addAction:cancel];
+                         UIAlertAction *accept = [UIAlertAction actionWithTitle:NSLocalizedString([context stringNamed:LPMT_ARG_ACCEPT_TEXT], nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                             [self alertDismissedWithButtonIndex:1];
+                         }];
+                         [alert addAction:accept];
+                         
+                         // Adding the AlertAction for Maybe button
+                         UIAlertAction *maybe = [UIAlertAction actionWithTitle:NSLocalizedString([context stringNamed:LPMT_ARG_MAYBE_TEXT], nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                             [self alertDismissedWithButtonIndex:0];
+                         }];
+                         [alert addAction:maybe];
+                         /////////////////////////////////////////////////////////////////////////////////////////////////////////
+                         //MJRJR - call the custom method to POST to LP
+                         NSDictionary *messageData = [Leanplum messageMetadata];
+                         NSLog(@"%@", messageData[[context messageId]]);
+                         NSTimeInterval timeInSeconds = [[NSDate date] timeIntervalSince1970];
+                         NSDictionary *data = @{@"appId":@"app_c9vWZ3Ri2chxGwSNY2nkBP9aYQtp3ahcyuIG88EMAwI",
+                                                @"clientKey":@"dev_2VyG6r5lSk08WTT5r1vFE3AwC1PWUwIZYRdVWjGkuLo",
+                                                @"apiVersion":@"1.0.6",
+                                                @"userId":@"mrawlings89",
+                                                @"devMode":@"true",
+                                                @"createDisposition":@"CreateIfNeeded",
+                                                //@"time": @"timeInSeconds",
+                                                @"messgeData": @[messageData[[context messageId]]],
+                                                @"event":@"messageShown",};
+                         [self postRequest:@"https://www.leanplum.com/api?action=track"
+                                  withData:data
+                               withHandler:^(NSURLResponse *response, NSData *rawData, NSError *error) {
+                                   NSString *string = [[NSString alloc] initWithData:rawData
+                                                                            encoding:NSUTF8StringEncoding];
+                                   NSHTTPURLResponse* httpResponse = (NSHTTPURLResponse*)response;
+                                   NSInteger code = [httpResponse statusCode];
+                                   NSLog(@"%ld", (long)code);
+                               }];
+                         ////end of Mike's Stuff
+                         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                         [[LPMessageTemplatesClass visibleViewController]
+                          presentViewController:alert animated:YES completion:nil];
+                         
+                     } else
+#endif
+                     {
+#if LP_NOT_TV
+                         UIAlertView *alert = [[UIAlertView alloc]
+                                               initWithTitle:NSLocalizedString([context stringNamed:LPMT_ARG_TITLE], nil)
+                                               message:NSLocalizedString([context stringNamed:LPMT_ARG_MESSAGE], nil)
+                                               delegate:self
+                                               cancelButtonTitle:NSLocalizedString([context stringNamed:LPMT_ARG_CANCEL_TEXT], nil)
+                                               otherButtonTitles:NSLocalizedString([context stringNamed:LPMT_ARG_ACCEPT_TEXT], nil),nil];
+                         [alert show];
+#endif
+                     }
+                     [self->_contexts addObject:context];
+                     
+                     return YES;
+                 }
+                 @catch (NSException *exception) {
+                     LOG_LP_MESSAGE_EXCEPTION;
+                     return NO;
+                 }
+             }];
     
     [Leanplum defineAction:LPMT_OPEN_URL_NAME
                     ofKind:kLeanplumActionKindAction
@@ -326,8 +434,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
              withResponder:^BOOL(LPActionContext *context) {
                  @try {
                      dispatch_async(dispatch_get_main_queue(), ^{
-                         NSString *encodedURLString = [[self class] urlEncodedStringFromString:[context stringNamed:LPMT_ARG_URL]];
-                         NSURL *url = [NSURL URLWithString: encodedURLString];
+                         NSURL *url = [NSURL URLWithString:[context stringNamed:LPMT_ARG_URL]];
                          if ([[UIApplication sharedApplication] respondsToSelector:@selector(openURL:options:completionHandler:)]) {
                              [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
                          } else {
@@ -385,13 +492,13 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                      NSLog(@"Leanplum: Pushes already enabled");
                      return NO;
                  } else if ([[NSUserDefaults standardUserDefaults] boolForKey:DEFAULTS_ASKED_TO_PUSH]) {
-                         NSLog(@"Leanplum: Already asked to push");
-                         return NO;
+                     NSLog(@"Leanplum: Already asked to push");
+                     return NO;
                  } else {
                      if ([context hasMissingFiles]) {
                          return NO;
                      }
-
+                     
                      @try {
                          [self closePopupWithAnimation:NO];
                          [self->_contexts addObject:context];
@@ -418,11 +525,36 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         if ([context hasMissingFiles]) {
             return NO;
         }
-
+        
         @try {
             [self closePopupWithAnimation:NO];
             [self->_contexts addObject:context];
             [self showPopup];
+            ////////////////////////////////////////////////////////////////////////////////////////////////
+            //MJRJR - call the custom method to POST to LP in the messageResponder
+            NSDictionary *messageData = [Leanplum messageMetadata];
+            NSLog(@"%@", messageData[[context messageId]]);
+            NSTimeInterval timeInSeconds = [[NSDate date] timeIntervalSince1970];
+            NSDictionary *data = @{@"appId":@"app_c9vWZ3Ri2chxGwSNY2nkBP9aYQtp3ahcyuIG88EMAwI",
+                                   @"clientKey":@"dev_2VyG6r5lSk08WTT5r1vFE3AwC1PWUwIZYRdVWjGkuLo",
+                                   @"apiVersion":@"1.0.6",
+                                   @"userId":@"mrawlings89",
+                                   @"devMode":@"true",
+                                   @"createDisposition":@"CreateIfNeeded",
+                                   //@"time": @"timeInSeconds",
+                                   @"messgeData": @[messageData[[context messageId]]],
+                                   @"event":@"messageShown",};
+            [self postRequest:@"https://www.leanplum.com/api?action=track"
+                     withData:data
+                  withHandler:^(NSURLResponse *response, NSData *rawData, NSError *error) {
+                      NSString *string = [[NSString alloc] initWithData:rawData
+                                                               encoding:NSUTF8StringEncoding];
+                      NSHTTPURLResponse* httpResponse = (NSHTTPURLResponse*)response;
+                      NSInteger code = [httpResponse statusCode];
+                      NSLog(@"%ld", (long)code);
+                  }];
+            ////end of Mike's Stuff
+            ///////////////////////////////////////////////////////////////////////////////////////////////
             return YES;
         }
         @catch (NSException *exception) {
@@ -430,7 +562,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
             return NO;
         }
     };
-
+    
     [Leanplum defineAction:LPMT_CENTER_POPUP_NAME
                     ofKind:kLeanplumActionKindMessage | kLeanplumActionKindAction
              withArguments:@[
@@ -464,14 +596,14 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                              [LPActionArg argNamed:LPMT_ARG_ACCEPT_ACTION withAction:nil]
                              ]
              withResponder:messageResponder];
-
+    
     [Leanplum defineAction:LPMT_WEB_INTERSTITIAL_NAME
                     ofKind:kLeanplumActionKindMessage | kLeanplumActionKindAction
              withArguments:@[
-                    [LPActionArg argNamed:LPMT_ARG_URL withString:LPMT_DEFAULT_URL],
-                    [LPActionArg argNamed:LPMT_ARG_URL_CLOSE withString:LPMT_DEFAULT_CLOSE_URL],
-                    [LPActionArg argNamed:LPMT_HAS_DISMISS_BUTTON
-                                 withBool:LPMT_DEFAULT_HAS_DISMISS_BUTTON]]
+                             [LPActionArg argNamed:LPMT_ARG_URL withString:LPMT_DEFAULT_URL],
+                             [LPActionArg argNamed:LPMT_ARG_URL_CLOSE withString:LPMT_DEFAULT_CLOSE_URL],
+                             [LPActionArg argNamed:LPMT_HAS_DISMISS_BUTTON
+                                          withBool:LPMT_DEFAULT_HAS_DISMISS_BUTTON]]
              withResponder:^BOOL(LPActionContext *context) {
                  @try {
                      [self closePopupWithAnimation:NO];
@@ -484,25 +616,25 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                      return NO;
                  }
              }];
-
+    
     [Leanplum defineAction:LPMT_HTML_NAME
                     ofKind:kLeanplumActionKindMessage | kLeanplumActionKindAction
              withArguments:@[
-                    [LPActionArg argNamed:LPMT_ARG_URL_CLOSE withString:LPMT_DEFAULT_CLOSE_URL],
-                    [LPActionArg argNamed:LPMT_ARG_URL_OPEN withString:LPMT_DEFAULT_OPEN_URL],
-                    [LPActionArg argNamed:LPMT_ARG_URL_TRACK withString:LPMT_DEFAULT_TRACK_URL],
-                    [LPActionArg argNamed:LPMT_ARG_URL_ACTION withString:LPMT_DEFAULT_ACTION_URL],
-                    [LPActionArg argNamed:LPMT_ARG_URL_TRACK_ACTION
-                               withString:LPMT_DEFAULT_TRACK_ACTION_URL],
-                    [LPActionArg argNamed:LPMT_ARG_HTML_ALIGN withString:LPMT_ARG_HTML_ALIGN_TOP],
-                    [LPActionArg argNamed:LPMT_ARG_HTML_HEIGHT withNumber:@0],
-                    [LPActionArg argNamed:LPMT_ARG_HTML_WIDTH withString:@"100%"],
-                    [LPActionArg argNamed:LPMT_ARG_HTML_Y_OFFSET withString:@"0px"],
-                    [LPActionArg argNamed:LPMT_ARG_HTML_TAP_OUTSIDE_TO_CLOSE withBool:NO],
-                    [LPActionArg argNamed:LPMT_HAS_DISMISS_BUTTON withBool:NO],
-                    [LPActionArg argNamed:LPMT_ARG_HTML_TEMPLATE withFile:nil]]
+                             [LPActionArg argNamed:LPMT_ARG_URL_CLOSE withString:LPMT_DEFAULT_CLOSE_URL],
+                             [LPActionArg argNamed:LPMT_ARG_URL_OPEN withString:LPMT_DEFAULT_OPEN_URL],
+                             [LPActionArg argNamed:LPMT_ARG_URL_TRACK withString:LPMT_DEFAULT_TRACK_URL],
+                             [LPActionArg argNamed:LPMT_ARG_URL_ACTION withString:LPMT_DEFAULT_ACTION_URL],
+                             [LPActionArg argNamed:LPMT_ARG_URL_TRACK_ACTION
+                                        withString:LPMT_DEFAULT_TRACK_ACTION_URL],
+                             [LPActionArg argNamed:LPMT_ARG_HTML_ALIGN withString:LPMT_ARG_HTML_ALIGN_TOP],
+                             [LPActionArg argNamed:LPMT_ARG_HTML_HEIGHT withNumber:@0],
+                             [LPActionArg argNamed:LPMT_ARG_HTML_WIDTH withString:@"100%"],
+                             [LPActionArg argNamed:LPMT_ARG_HTML_Y_OFFSET withString:@"0px"],
+                             [LPActionArg argNamed:LPMT_ARG_HTML_TAP_OUTSIDE_TO_CLOSE withBool:NO],
+                             [LPActionArg argNamed:LPMT_HAS_DISMISS_BUTTON withBool:NO],
+                             [LPActionArg argNamed:LPMT_ARG_HTML_TEMPLATE withFile:nil]]
              withResponder:messageResponder];
-
+    
     [Leanplum defineAction:LPMT_APP_RATING_NAME
                     ofKind:kLeanplumActionKindAction withArguments:@[]
              withResponder:^BOOL(LPActionContext *context) {
@@ -515,7 +647,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                  }
                  return NO;
              }];
-
+    
     if ([self hasAlternateIcon]) {
         [Leanplum defineAction:LPMT_ICON_CHANGE_NAME
                         ofKind:kLeanplumActionKindAction
@@ -535,7 +667,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                      return NO;
                  }];
     }
-
+    
 #endif
 }
 
@@ -624,7 +756,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     LPActionContext *context = _contexts.lastObject;
     BOOL isFullscreen = [context.actionName isEqualToString:LPMT_INTERSTITIAL_NAME];
     BOOL isWeb = [context.actionName isEqualToString:LPMT_WEB_INTERSTITIAL_NAME] ||
-                 [context.actionName isEqualToString:LPMT_HTML_NAME];
+    [context.actionName isEqualToString:LPMT_HTML_NAME];
     BOOL isPushAskToAsk = [context.actionName isEqualToString:LPMT_PUSH_ASK_TO_ASK];
     
     if (isWeb) {
@@ -658,7 +790,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         _dismissButton.layer.masksToBounds = YES;
         _dismissButton.titleLabel.font = [UIFont systemFontOfSize:13];
         _dismissButton.layer.borderWidth = 0;
-        _dismissButton.layer.cornerRadius = LPMT_DISMISS_BUTTON_SIZE / 2;
+        _dismissButton.layer.cornerRadius = _dismissButton.frame.size.height / 2;
         [_popupGroup addSubview:_dismissButton];
     }
     
@@ -668,19 +800,27 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     [self refreshPopupContent];
     [self updatePopupLayout];
     
+    if (isPushAskToAsk) {
+        [_acceptButton.titleLabel setFont: [UIFont fontWithName:@"Poppins-Bold" size:14]];
+        _acceptButton.layer.cornerRadius = _acceptButton.frame.size.height/2;
+        _acceptButton.layer.backgroundColor = [UIColor whiteColor].CGColor;
+        [_cancelButton.titleLabel setFont: [UIFont fontWithName:@"Poppins-Bold" size:14]];
+        _cancelButton.layer.cornerRadius = _cancelButton.frame.size.height/2;
+        _cancelButton.layer.backgroundColor = [UIColor whiteColor].CGColor;
+        _cancelButton.layer.borderColor = [UIColor blackColor].CGColor;
+        _cancelButton.layer.borderWidth = 1;
+    }
+    
     [_popupGroup setAlpha:0.0];
     [[UIApplication sharedApplication].keyWindow addSubview:_popupGroup];
     [UIView animateWithDuration:LPMT_POPUP_ANIMATION_LENGTH animations:^{
         [self->_popupGroup setAlpha:1.0];
     }];
     
-#if LP_NOT_TV
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(orientationDidChange:)
-                                                 name:UIDeviceOrientationDidChangeNotification
+                                                 name:UIApplicationDidChangeStatusBarOrientationNotification
                                                object:nil];
-#endif
-
 }
 
 - (void)setupPopupLayout:(BOOL)isFullscreen isPushAskToAsk:(BOOL)isPushAskToAsk
@@ -689,39 +829,54 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     [_popupView addSubview:_popupBackground];
     _popupBackground.contentMode = UIViewContentModeScaleAspectFill;
     if (!isFullscreen) {
-        _popupView.layer.cornerRadius = 12;
+        _popupView.layer.cornerRadius = 0;
     }
     _popupView.clipsToBounds = YES;
     
-    // Accept button.
-    _acceptButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    _acceptButton.layer.cornerRadius = 6;
-    _acceptButton.adjustsImageWhenHighlighted = YES;
-    _acceptButton.layer.masksToBounds = YES;
-    _acceptButton.titleLabel.font = [UIFont systemFontOfSize:15];
-    [_popupView addSubview:_acceptButton];
-    
     if (isPushAskToAsk) {
-        _acceptButton.titleLabel.font = [UIFont boldSystemFontOfSize:15];
-        _acceptButton.layer.cornerRadius = 0;
+        _popupView.layer.borderWidth = 2;
+        _popupView.layer.borderColor = [UIColor blackColor].CGColor;
+        
+        _acceptButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        [_acceptButton.titleLabel setFont: [UIFont fontWithName:@"Poppins-Bold" size:14]];
+        _acceptButton.layer.cornerRadius = _acceptButton.frame.size.height/2;
+        _acceptButton.layer.backgroundColor = [UIColor whiteColor].CGColor;
+        _acceptButton.adjustsImageWhenHighlighted = YES;
+        _acceptButton.layer.masksToBounds = YES;
+        [_popupView addSubview:_acceptButton];
+        
         _cancelButton = [UIButton buttonWithType:UIButtonTypeCustom];
-        _cancelButton.layer.cornerRadius = 0;
+        _cancelButton.layer.borderColor = [UIColor blackColor].CGColor;
+        _cancelButton.layer.borderWidth = 1;
+        _cancelButton.layer.backgroundColor = [UIColor whiteColor].CGColor;
         _cancelButton.adjustsImageWhenHighlighted = YES;
         _cancelButton.layer.masksToBounds = YES;
-        _cancelButton.titleLabel.font = [UIFont systemFontOfSize:15];
+        [_cancelButton.titleLabel setFont: [UIFont fontWithName:@"Poppins-Bold" size:14]];
         [_cancelButton setTitleColor:[UIColor whiteColor] forState:UIControlStateHighlighted];
+        _cancelButton.layer.cornerRadius = _cancelButton.frame.size.height/2;
+        
         [_popupView addSubview:_cancelButton];
+    }
+    else {
+        // Accept button.
+        _acceptButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        _acceptButton.layer.cornerRadius = 2.0f;
+        _acceptButton.adjustsImageWhenHighlighted = YES;
+        _acceptButton.layer.masksToBounds = YES;
+        _acceptButton.titleLabel.font = [UIFont systemFontOfSize:15];
+        [_popupView addSubview:_acceptButton];
     }
     
     // Title.
     _titleLabel = [[UILabel alloc] init];
     _titleLabel.textAlignment = ALIGN_CENTER;
-    _titleLabel.font = [UIFont boldSystemFontOfSize:20];
+    _titleLabel.font = [UIFont fontWithName:@"Poppins-Bold" size:21];;
     _titleLabel.backgroundColor = [UIColor clearColor];
     [_popupView addSubview:_titleLabel];
     
     // Message.
     _messageLabel = [[UILabel alloc] init];
+    [_messageLabel setFont: [UIFont fontWithName:@"Roboto-Regular" size:16]];
     _messageLabel.textAlignment = ALIGN_CENTER;
     _messageLabel.numberOfLines = 0;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 60000
@@ -759,7 +914,28 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         [self performSelector:@selector(updatePopupLayout) withObject:nil afterDelay:0];
     }
 }
-
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////MJR  Custom method for a POST request
+- (void)postRequest:(NSString *)action withData:(NSDictionary *)dataToSend withHandler:(void (^)(NSURLResponse *response, NSData *data, NSError *error))ourBlock {
+    NSString *urlString = [NSString stringWithFormat:@"%@", action];
+    NSLog(@"%@", urlString);
+    
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dataToSend options:kNilOptions error:nil];
+    if (! jsonData) {
+        NSLog(@"Got an error: %@", error);
+    } else {
+        [request setHTTPMethod:@"POST"];
+        [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+        [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+        [request setHTTPBody: jsonData];
+        [NSURLConnection sendAsynchronousRequest:request queue:[NSOperationQueue mainQueue] completionHandler:ourBlock];
+    }
+}
+////End of Mike's Stuff
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)closePopupWithAnimation:(BOOL)animated
 {
     [self closePopupWithAnimation:animated actionNamed:nil track:NO];
@@ -801,7 +977,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
             }
         }
     };
-
+    
     if (animated) {
         [UIView animateWithDuration:LPMT_POPUP_ANIMATION_LENGTH animations:^{
             [self->_popupGroup setAlpha:0.0];
@@ -839,11 +1015,13 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
 - (void)enablePush
 {
     [self accept];
+    [self sendEventTags:kRSTAGEvent_NotificationSoftAsk isNotNow:NO isHardAsk:NO];
     [self enableSystemPush];
 }
 
 - (void)deferPush
 {
+    [self sendEventTags:kRSTAGEvent_NotificationSoftAsk isNotNow:YES isHardAsk:NO];
     [self closePopupWithAnimation:YES actionNamed:LPMT_ARG_CANCEL_ACTION track:YES];
 }
 
@@ -885,7 +1063,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     // device Settings.
     //    NSURL *appSettings = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
     //    [[UIApplication sharedApplication] openURL:appSettings];
-
+    
     [[NSUserDefaults standardUserDefaults] setBool:YES forKey:DEFAULTS_LEANPLUM_ENABLED_PUSH];
     LeanplumPushSetupBlock block = [Leanplum pushSetupBlock];
     if (block) {
@@ -912,26 +1090,16 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                      if (error) {
                          NSLog(@"Leanplum: Failed to request authorization for user "
                                "notifications: %@", error);
+                         // Tag Hard failure
+                     } else {
+                         // Tag Hard YES
+                         dispatch_async(dispatch_get_main_queue(), ^{
+                             [self sendEventTags:(granted == YES) ? kRSTAGEvent_PushAskYes : kRSTAGEvent_PushAskNo isNotNow:YES isHardAsk:granted];
+                         });
                      }
                  });
         }
         [[UIApplication sharedApplication] registerForRemoteNotifications];
-    } else if ([[UIApplication sharedApplication] respondsToSelector:
-                @selector(registerUserNotificationSettings:)]) {
-        // iOS 8-9.
-        UIUserNotificationSettings *settings = [UIUserNotificationSettings
-                                                settingsForTypes:UIUserNotificationTypeAlert |
-                                                UIUserNotificationTypeBadge |
-                                                UIUserNotificationTypeSound categories:nil];
-        [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
-        [[UIApplication sharedApplication] registerForRemoteNotifications];
-    } else {
-        // iOS 7 and below.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        [[UIApplication sharedApplication] registerForRemoteNotificationTypes:
-#pragma clang diagnostic pop
-         UIUserNotificationTypeSound | UIUserNotificationTypeAlert | UIUserNotificationTypeBadge];
     }
 }
 
@@ -960,14 +1128,12 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                        [context.actionName isEqualToString:LPMT_WEB_INTERSTITIAL_NAME] ||
                        [context.actionName isEqualToString:LPMT_HTML_NAME]);
     BOOL isWeb = [context.actionName isEqualToString:LPMT_WEB_INTERSTITIAL_NAME] ||
-                 [context.actionName isEqualToString:LPMT_HTML_NAME];
-
-    UIEdgeInsets safeAreaInsets = [self safeAreaInsets];
-
-    CGFloat statusBarHeight = ([[UIApplication sharedApplication] isStatusBarHidden] || !fullscreen) ? safeAreaInsets.top
+    [context.actionName isEqualToString:LPMT_HTML_NAME];
+    
+    CGFloat statusBarHeight = ([[UIApplication sharedApplication] isStatusBarHidden] || !fullscreen) ? 0
     : MIN([UIApplication sharedApplication].statusBarFrame.size.height,
           [UIApplication sharedApplication].statusBarFrame.size.width);
-
+    
     UIInterfaceOrientation orientation;
     if (LP_SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"8.0")) {
         orientation = UIInterfaceOrientationPortrait;
@@ -1020,20 +1186,19 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                               screenWidth:screenWidth
                              screenHeight:screenHeight];
     }
-
+    
     if (!isWeb) {
         [self updateNonWebPopupLayout:statusBarHeight];
         _overlayView.frame = CGRectMake(0, 0, screenWidth, screenHeight);
     }
-    CGFloat leftSafeAreaX = safeAreaInsets.left;
+    
     CGFloat dismissButtonX = screenWidth - _dismissButton.frame.size.width - LPMT_ACCEPT_BUTTON_MARGIN / 2;
     CGFloat dismissButtonY = statusBarHeight + LPMT_ACCEPT_BUTTON_MARGIN / 2;
     if (!fullscreen) {
         dismissButtonX = _popupView.frame.origin.x + _popupView.frame.size.width - 3 * _dismissButton.frame.size.width / 4;
         dismissButtonY = _popupView.frame.origin.y - _dismissButton.frame.size.height / 4;
     }
-    
-    _dismissButton.frame = CGRectMake(dismissButtonX - leftSafeAreaX, dismissButtonY, _dismissButton.frame.size.width,
+    _dismissButton.frame = CGRectMake(dismissButtonX, dismissButtonY, _dismissButton.frame.size.width,
                                       _dismissButton.frame.size.height);
 }
 
@@ -1045,9 +1210,6 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     // Calculate the height. Fullscreen by default.
     CGFloat htmlHeight = [[context numberNamed:LPMT_ARG_HTML_HEIGHT] doubleValue];
     BOOL isFullscreen = htmlHeight < 1;
-    UIEdgeInsets safeAreaInsets = [self safeAreaInsets];
-    CGFloat bottomSafeAreaHeight = safeAreaInsets.bottom;
-    BOOL isIPhoneX = statusBarHeight > 40 || safeAreaInsets.left > 40 || safeAreaInsets.right > 40;
     
     // Banner logic.
     if (!isFullscreen) {
@@ -1063,7 +1225,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         CGFloat htmlY = yOffset + statusBarHeight;
         NSString *htmlAlign = [context stringNamed:LPMT_ARG_HTML_ALIGN];
         if ([htmlAlign isEqualToString:LPMT_ARG_HTML_ALIGN_BOTTOM]) {
-            htmlY = screenHeight - htmlHeight - yOffset;
+            htmlY = screenHeight - htmlHeight - yOffset - statusBarHeight;
         }
         
         // Calculate HTML width by percentage or px (it parses any suffix for extra protection).
@@ -1085,23 +1247,9 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         }
         
         CGFloat htmlX = (screenWidth - htmlWidth) / 2.;
-        // Offset iPhoneX's safe area.
-        if (isIPhoneX) {
-            CGFloat bottomDistance = screenHeight - (htmlY + htmlHeight);
-            if (bottomDistance < bottomSafeAreaHeight) {
-                htmlHeight += bottomSafeAreaHeight;
-            }
-        }
         _popupGroup.frame = CGRectMake(htmlX, htmlY, htmlWidth, htmlHeight);
-        
-    } else if (isIPhoneX) {
-        _popupGroup.frame = CGRectMake(safeAreaInsets.left, safeAreaInsets.top,
-                                       screenWidth - safeAreaInsets.left - safeAreaInsets.right,
-                                       screenHeight - safeAreaInsets.top - bottomSafeAreaHeight);
-        
-        NSLog( @"%@", NSStringFromCGRect(_popupGroup.frame) );
-        NSLog(@"%f, %f", screenWidth, screenHeight);
-        NSLog(@"%@", NSStringFromUIEdgeInsets(safeAreaInsets));
+    } else if (statusBarHeight > 40) { // iPhone X
+        _popupGroup.frame = CGRectMake(0, -statusBarHeight, screenWidth, screenHeight+2*statusBarHeight);
     }
     
     _popupView.frame = _popupGroup.bounds;
@@ -1115,7 +1263,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     if (!htmlString || [htmlString length] == 0) {
         return 0;
     }
-
+    
     if ([htmlString hasSuffix:@"%"]) {
         NSString *percentageValue = [htmlString stringByReplacingOccurrencesOfString:@"%"
                                                                           withString:@""];
@@ -1152,32 +1300,66 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
 {
     _popupBackground.frame = CGRectMake(0, 0, _popupView.frame.size.width, _popupView.frame.size.height);
     CGSize textSize = [self getTextSizeFromButton:_acceptButton];
-
+    
+    // For our ask to ask I need to move the buttons around a bit so lets check -joel.check
+    LPActionContext *context = _contexts.lastObject;
+    BOOL isPushAskToAsk = [context.actionName isEqualToString:LPMT_PUSH_ASK_TO_ASK];
+    float insetVal = (_popupView.frame.size.width * 0.20)/3; // 1/3 spacing
+    
+    
     if (_cancelButton) {
         CGSize cancelTextSize = [self getTextSizeFromButton:_cancelButton];
         textSize = CGSizeMake(MAX(textSize.width, cancelTextSize.width),
                               MAX(textSize.height, cancelTextSize.height));
-        _cancelButton.frame = CGRectMake(0,
-                                         _popupView.frame.size.height - textSize.height - 2*LPMT_TWO_BUTTON_PADDING,
-                                         _popupView.frame.size.width / 2,
-                                         textSize.height + 2*LPMT_TWO_BUTTON_PADDING);
-        _acceptButton.frame = CGRectMake(_popupView.frame.size.width / 2,
-                                         _popupView.frame.size.height - textSize.height - 2*LPMT_TWO_BUTTON_PADDING,
-                                         _popupView.frame.size.width / 2,
-                                         textSize.height + 2*LPMT_TWO_BUTTON_PADDING);
+        
+        if (isPushAskToAsk) { // soft ask messages
+            _cancelButton.frame =
+            CGRectMake( insetVal,
+                       (_popupView.frame.size.height - textSize.height - (2*LPMT_TWO_BUTTON_PADDING))-20,
+                       (_popupView.frame.size.width / 2)-(insetVal*1.5),
+                       textSize.height + 2*LPMT_TWO_BUTTON_PADDING);
+            
+            _acceptButton.frame =
+            CGRectMake((_popupView.frame.size.width / 2)+ (insetVal/2),
+                       (_popupView.frame.size.height - textSize.height - 2*LPMT_TWO_BUTTON_PADDING)-20,
+                       (_popupView.frame.size.width / 2)-(insetVal*1.5),
+                       textSize.height + 2*LPMT_TWO_BUTTON_PADDING);
+        } else { // normal popup messages
+            _cancelButton.frame = CGRectMake(0,
+                                             _popupView.frame.size.height - textSize.height - 2*LPMT_TWO_BUTTON_PADDING,
+                                             _popupView.frame.size.width / 2,
+                                             textSize.height + 2*LPMT_TWO_BUTTON_PADDING);
+            _acceptButton.frame = CGRectMake(_popupView.frame.size.width / 2,
+                                             _popupView.frame.size.height - textSize.height - 2*LPMT_TWO_BUTTON_PADDING,
+                                             _popupView.frame.size.width / 2,
+                                             textSize.height + 2*LPMT_TWO_BUTTON_PADDING);
+        }
     } else {
         _acceptButton.frame = CGRectMake(
                                          (_popupView.frame.size.width - textSize.width - 2*LPMT_ACCEPT_BUTTON_MARGIN) / 2,
-                                         _popupView.frame.size.height - textSize.height - 3*LPMT_ACCEPT_BUTTON_MARGIN - [self safeAreaInsets].bottom,
+                                         _popupView.frame.size.height - textSize.height - 3*LPMT_ACCEPT_BUTTON_MARGIN,
                                          textSize.width + 2*LPMT_ACCEPT_BUTTON_MARGIN,
                                          textSize.height + 2*LPMT_ACCEPT_BUTTON_MARGIN);
     }
-    _titleLabel.frame = CGRectMake(LPMT_ACCEPT_BUTTON_MARGIN, LPMT_ACCEPT_BUTTON_MARGIN + statusBarHeight,
-                                   _popupView.frame.size.width - LPMT_ACCEPT_BUTTON_MARGIN * 2, LPMT_TITLE_LABEL_HEIGHT);
-    _messageLabel.frame = CGRectMake(LPMT_ACCEPT_BUTTON_MARGIN,
-                                     LPMT_ACCEPT_BUTTON_MARGIN * 2 + LPMT_TITLE_LABEL_HEIGHT + statusBarHeight,
-                                     _popupView.frame.size.width - LPMT_ACCEPT_BUTTON_MARGIN * 2,
-                                     _popupView.frame.size.height - LPMT_ACCEPT_BUTTON_MARGIN * 4 - LPMT_TITLE_LABEL_HEIGHT - LPMT_ACCEPT_BUTTON_HEIGHT - statusBarHeight);
+    
+    if (isPushAskToAsk) {
+        _titleLabel.frame = CGRectMake(insetVal, LPMT_ACCEPT_BUTTON_MARGIN*3,
+                                       _popupView.frame.size.width - (insetVal*2), LPMT_TITLE_LABEL_HEIGHT );
+        
+        CGRect messageLabelFrame = CGRectMake(insetVal,
+                                              _titleLabel.frame.size.height + (insetVal*2),
+                                              _titleLabel.frame.size.width,
+                                              _titleLabel.frame.size.height * 2.5);
+        
+        _messageLabel.frame = messageLabelFrame;
+    } else {
+        _titleLabel.frame = CGRectMake(LPMT_ACCEPT_BUTTON_MARGIN, LPMT_ACCEPT_BUTTON_MARGIN + statusBarHeight,
+                                       _popupView.frame.size.width - LPMT_ACCEPT_BUTTON_MARGIN * 2, LPMT_TITLE_LABEL_HEIGHT);
+        _messageLabel.frame = CGRectMake(LPMT_ACCEPT_BUTTON_MARGIN,
+                                         LPMT_ACCEPT_BUTTON_MARGIN * 2 + LPMT_TITLE_LABEL_HEIGHT + statusBarHeight,
+                                         _popupView.frame.size.width - LPMT_ACCEPT_BUTTON_MARGIN * 2,
+                                         _popupView.frame.size.height - LPMT_ACCEPT_BUTTON_MARGIN * 4 - LPMT_TITLE_LABEL_HEIGHT - LPMT_ACCEPT_BUTTON_HEIGHT - statusBarHeight);
+    }
 }
 
 - (void)refreshPopupContent
@@ -1223,7 +1405,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                 webView.delegate = self;
                 if ([actionName isEqualToString:LPMT_WEB_INTERSTITIAL_NAME]) {
                     [webView loadRequest:[NSURLRequest requestWithURL:
-                                        [NSURL URLWithString:[context stringNamed:LPMT_ARG_URL]]]];
+                                          [NSURL URLWithString:[context stringNamed:LPMT_ARG_URL]]]];
                 } else {
                     webView.allowsInlineMediaPlayback = YES;
                     webView.mediaPlaybackRequiresUserAction = NO;
@@ -1237,18 +1419,6 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
         LOG_LP_MESSAGE_EXCEPTION;
     }
 }
-
--(UIEdgeInsets)safeAreaInsets
-{
-    UIEdgeInsets insets = UIEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
-    if (@available(iOS 11.0, *)) {
-        insets = [UIApplication sharedApplication].keyWindow.safeAreaInsets;
-    } else {
-        insets.top = [[UIApplication sharedApplication] isStatusBarHidden] ? 0 : 20.0;
-    }
-    return insets;
-}
-
 
 - (void)appStorePrompt
 {
@@ -1278,7 +1448,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     NSString *iconName = [filename stringByReplacingOccurrencesOfString:LPMT_ICON_FILE_PREFIX
                                                              withString:@""];
     iconName = [iconName stringByReplacingOccurrencesOfString:@".png" withString:@""];
-
+    
     UIApplication *app = [UIApplication sharedApplication];
     if ([app respondsToSelector:@selector(setAlternateIconName:completionHandler:)] &&
         [app respondsToSelector:@selector(alternateIconName)]) {
@@ -1287,13 +1457,13 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
                          [iconName isEqualToString:LPMT_ICON_PRIMARY_NAME])) {
             iconName = nil;
         }
-
+        
         NSString *currentIconName = [app alternateIconName];
         if ((iconName && [iconName isEqualToString:currentIconName]) ||
             (iconName == nil && currentIconName == nil)) {
             return;
         }
-
+        
         [app setAlternateIconName:iconName completionHandler:^(NSError * _Nullable error) {
             if (!error) {
                 return;
@@ -1306,8 +1476,8 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
             dispatch_after(dispatchTime, dispatch_get_main_queue(), ^{
                 [[UIApplication sharedApplication] setAlternateIconName:iconName
                                                       completionHandler:^(NSError *error) {
-                    NSLog(@"Fail to change app icon: %@", error);
-                }];
+                                                          NSLog(@"Fail to change app icon: %@", error);
+                                                      }];
             });
         }];
     }
@@ -1336,7 +1506,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
             NSArray *parameterComponents = [parameter componentsSeparatedByString:@"="];
             if ([parameterComponents count] > 1) {
                 components[parameterComponents[0]] = [parameterComponents[1]
-                    stringByReplacingPercentEscapesUsingEncoding:NSASCIIStringEncoding];
+                                                      stringByReplacingPercentEscapesUsingEncoding:NSASCIIStringEncoding];
             }
         }
     }
@@ -1348,7 +1518,7 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
     if (webView.isLoading) {
         return;
     }
-
+    
     // Show for WEB INSTERSTITIAL. HTML will show after js loads the template.
     LPActionContext *context = _contexts.lastObject;
     if ([[context actionName] isEqualToString:LPMT_WEB_INTERSTITIAL_NAME]) {
@@ -1370,24 +1540,24 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
             }
             return NO;
         }
-
+        
         // Only continue for HTML Template. Web Insterstitial will be deprecated.
         if ([[context actionName] isEqualToString:LPMT_WEB_INTERSTITIAL_NAME]) {
             return YES;
         }
-
+        
         if ([url rangeOfString:[context stringNamed:LPMT_ARG_URL_OPEN]].location != NSNotFound) {
             [self showWebview:webView];
             return NO;
         }
-
+        
         if ([url rangeOfString:[context stringNamed:LPMT_ARG_URL_TRACK]].location != NSNotFound) {
             NSString *event = queryComponents[@"event"];
             if (event) {
                 double value = [queryComponents[@"value"] doubleValue];
                 NSString *info = queryComponents[@"info"];
                 NSDictionary *parameters = [self JSONFromString:queryComponents[@"parameters"]];
-
+                
                 if (queryComponents[@"isMessageEvent"]) {
                     [context trackMessageEvent:event
                                      withValue:value
@@ -1399,14 +1569,14 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
             }
             return NO;
         }
-
+        
         if ([url rangeOfString:[context stringNamed:LPMT_ARG_URL_ACTION]].location != NSNotFound) {
             if (queryComponents[@"action"]) {
                 [self closePopupWithAnimation:YES actionNamed:queryComponents[@"action"] track:NO];
             }
             return NO;
         }
-
+        
         if ([url rangeOfString:
              [context stringNamed:LPMT_ARG_URL_TRACK_ACTION]].location != NSNotFound) {
             if (queryComponents[@"action"]) {
@@ -1436,19 +1606,5 @@ static NSString *DEFAULTS_LEANPLUM_ENABLED_PUSH = @"__Leanplum_enabled_push";
 }
 
 #endif
-
-/**
- * Helper method
- */
-
-+ (NSString *)urlEncodedStringFromString:(NSString *)urlString {
-    NSString *unreserved = @":-._~/?&=";
-    NSMutableCharacterSet *allowed = [NSMutableCharacterSet
-                                      alphanumericCharacterSet];
-    [allowed addCharactersInString:unreserved];
-    return [urlString
-            stringByAddingPercentEncodingWithAllowedCharacters:
-            allowed];
-}
 
 @end
